@@ -1,0 +1,154 @@
+% -*- coding: utf-8 -*-
+%
+% Official-form Japanese 履歴書 template.
+% Put this file and rireki.satyh in the same directory, then compile with:
+%
+%   satysfi rireki.saty -o rireki.pdf
+%
+@require: base/fn
+@require: base/list-ext
+@require: figbox/figbox
+@require: latexcmds/latexcmds
+
+@import: rireki
+
+let page1-education =
+    [
+        ({ 不詳 }, { 不詳 }, { 幻想郷の自然環境の中で発生 });
+        ({ 不詳 }, { 不詳 }, { 霧の湖周辺にて飛行、冷気操作、水上活動を習得 });
+        ({ 不詳 }, { 不詳 }, { 妖精仲間との共同生活を通じ、集団行動および対人対応を学ぶ });
+        ({ 不詳 }, { 不詳 }, { 寺子屋周辺に出入りし、基本的な読み書きに親しむ });
+    ] in
+
+let page1-work =
+    [
+        ({ 不詳 }, { 不詳 }, { 霧の湖周辺 環境維持・巡回活動に従事 });
+        ({ 不詳 }, { 不詳 }, { 来訪者対応、湖面凍結、季節演出、冷却支援等を担当 });
+        ({ 不詳 }, { 不詳 }, { 紅魔館周辺にて警戒補助および催事補助業務に従事 });
+        ({}, {}, { 以上 });
+    ]  |> Fn.flip List.append (List.repeat 14 rireki-empty-row) in
+
+let page2-licenses =
+    [
+        ({ 不詳 }, { 不詳 }, { 氷結操作能力 保有 });
+        ({ 不詳 }, { 不詳 }, { 飛行能力 保有 });
+        ({ 不詳 }, { 不詳 }, { 弾幕ごっこ実務経験 多数 });
+        ({ 不詳 }, { 不詳 }, { 真夏日冷却補助 実績あり });
+        ({ 不詳 }, { 不詳 }, { 寒冷地長時間活動 可 });
+        ({ 不詳 }, { 不詳 }, { 対カエル即応処理 技能あり });
+    ]   |> Fn.flip List.append (List.repeat 13 rireki-empty-row) in
+
+let pr-paragraphs = {|
+        明るく行動力があり、思い立ったらすぐ動けることが長所です。
+        |
+        特に屋外や現場対応の場面では、状況の変化にすばやく反応できます。
+        |
+        また、夏場の冷却支援や賑やかな催しでは高い能力を発揮できます。
+        |
+        自分では最強だと思っていますが、最近は協調性も意識するようにしています。||||||
+    |} in
+
+let request-paragraphs = {|
+        屋外勤務希望
+        |
+        夏季繁忙期歓迎
+        |
+        氷を使った演出業務があれば積極的に担当したい
+    |} |> Fn.flip List.append [rireki-empty-freeform-row] in
+
+% To force an empty row inside a row-style freeform box, insert
+% `rireki-empty-freeform-row`, e.g.:
+%
+% let paragraphs = [
+%   { 第一希望 };
+%   rireki-empty-freeform-row;
+%   { 第二希望 };
+% ] in
+
+let header-data = (|
+        current-year = { 9999 };
+        current-month = { 9 };
+        current-day = { 9 };
+        portrait = FigBox.include-image 28mm `portrait.pdf` |>
+                 FigBox.vmargin 2mm;
+        name-kana = { さるの };
+        name = { チルノ };
+    |) in
+
+let basic-info-data = (|
+        birth-year = { 9999 };
+        birth-month = { 9 };
+        birth-day = { 9 };
+        age = { 9 };
+        sex = { 記載しない };
+        address-kana = { げんそうきょう きりのみずうみしゅうへん };
+        address-postcode = { 999-9999 };
+        address-lines = {|
+            幻想郷 
+            霧の湖周辺 |
+        |};
+        phone = { 090-9999-9999 };
+        email = { cirno.9\@mistlake.jp };
+    |) in
+
+let contact-info-data = (|
+        contact-kana = { げんそうきょう こうまかんまえ りんじれんらくじょ };
+        contact-postcode = { 999-9998 };
+        contact-lines = {|
+            幻想郷 
+            紅魔館前・臨時連絡所 |
+        |};
+        contact-phone = { 080-9999-9999 };
+        contact-email = { cirno.contact\@mistlake.jp };
+    |) in
+
+let history-data = (|
+        education-rows = page1-education;
+        work-rows = page1-work;
+    |) in
+
+let license-data = (|
+        rows = page2-licenses;
+    |) in
+
+let pr-box-data = (|
+        title = {志望の動機、特技、自己PR、アピールポイントなど};
+        paragraphs = pr-paragraphs;
+        style = SingleLargeCell;
+    |) in
+
+let request-box-data = (|
+        title = {本人希望記入欄（特に給料、職種、勤務時間、勤務地、その他についての希望などがあれば記入）};
+        paragraphs = request-paragraphs;
+        style = OneParagraphPerRow;
+    |) in
+
+% To split long history or dated tables across multiple pages, prepare
+% multiple section records and place them wherever needed, e.g.:
+%
+%   +rireki-history(history-data-1);
+%   +clearpage;
+%   +rireki-history(history-data-2);
+%
+% To put blank rows inside history or dated tables, insert
+% `rireki-empty-row` into `education-rows`, `work-rows`, or
+% `rows`.
+%
+% To put blank rows inside `style = OneParagraphPerRow` freeform boxes,
+% insert `rireki-empty-freeform-row` into `paragraphs`.
+
+rireki-document '<
+    +rireki-header(header-data);
+    +rireki-basic-info(basic-info-data);
+    +rireki-contact-info(contact-info-data);
+    +vskip(8pt);
+    +rireki-history(history-data);
+    +vskip(4pt);
+    +rireki-note;
+    +clearpage;
+    +rireki-license(license-data);
+    +vskip(8pt);
+    +rireki-freeform-box(pr-box-data);
+    +vskip(8pt);
+    +rireki-freeform-box(request-box-data);
+>

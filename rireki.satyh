@@ -1,0 +1,500 @@
+% -*- coding: utf-8 -*-
+%
+% Official-style Japanese 履歴書 helper rendered natively with easytable.
+%
+
+@require: easytable/easytable
+@require: base/block
+@require: base/context
+@require: base/inline
+@require: base/pager
+@require: figbox/figbox
+@require: latexcmds/latexcmds
+@require: list
+@require: parallel/parallel
+
+open Block
+open Context
+open EasyTableAlias
+open Inline
+open Pager
+
+type freeform-style =
+  | SingleLargeCell
+  | OneParagraphPerRow
+
+type freeform-box = (|
+  title: inline-text;
+  paragraphs: inline-text list;
+  style: freeform-style;
+|)
+
+let paper-width = 210mm
+let paper-height = 297mm
+let side-margin = 12mm
+let top-margin = 12mm
+let bottom-margin = 8mm
+let text-width = paper-width -' side-margin -' side-margin
+let text-height = paper-height -' top-margin -' bottom-margin
+
+let body-font-size = 10pt
+let note-font-size = 8.5pt
+let date-font-size = 10pt
+let title-font-size = 20pt
+let name-font-size = 24pt
+
+let field-label-width = 22mm
+let right-strip-width = 47mm
+let left-strip-width = text-width -' right-strip-width
+let left-column-ratio = left-strip-width /' text-width
+let right-column-ratio = right-strip-width /' text-width
+
+let year-col-width = 22.5mm
+let month-col-width = 15mm
+let detail-col-width = text-width -' year-col-width -' month-col-width
+
+let empty-year-cell = {\phantom{00}}
+let empty-month-cell = {\phantom{00}}
+let empty-detail-cell = {\phantom{あ}}
+let empty-freeform-row = {\phantom{あ}}
+let rireki-empty-row = (empty-year-cell, empty-month-cell, empty-detail-cell)
+let rireki-empty-freeform-row = empty-freeform-row
+
+let field-label-left-pad = 4pt
+let field-label-right-pad = 4pt
+let field-value-left-pad = 6pt
+let field-value-right-pad = 4pt
+let header-left-pad = 8pt
+let header-right-pad = 5pt
+let history-year-left-pad = 5pt
+let history-year-right-pad = 5pt
+let history-month-left-pad = 5pt
+let history-month-right-pad = 5pt
+let history-detail-left-pad = 6pt
+let history-detail-right-pad = 4pt
+let freeform-left-pad = 8pt
+let freeform-right-pad = 8pt
+let freeform-row-left-pad = 8pt
+let freeform-row-right-pad = 8pt
+let name-kana-gap = 8pt
+
+let field-label-content-width =
+  field-label-width -' field-label-left-pad -' field-label-right-pad
+
+let name-row-content-width =
+  left-strip-width -' field-value-left-pad -' field-value-right-pad
+
+let info-left-content-width =
+  left-strip-width -' field-value-left-pad -' field-value-right-pad
+
+let info-right-content-width =
+  right-strip-width -' field-value-left-pad -' field-value-right-pad
+
+let header-content-width =
+  text-width -' header-left-pad -' header-right-pad
+
+let history-year-content-width =
+  year-col-width -' history-year-left-pad -' history-year-right-pad
+
+let history-month-content-width =
+  month-col-width -' history-month-left-pad -' history-month-right-pad
+
+let history-detail-content-width =
+  detail-col-width -' history-detail-left-pad -' history-detail-right-pad
+
+let freeform-body-content-width =
+  text-width -' freeform-left-pad -' freeform-right-pad
+
+let freeform-row-content-width =
+  text-width -' freeform-row-left-pad -' freeform-row-right-pad
+
+let font-latin-roman = (`Junicode`, 1.0, 0.0)
+let font-cjk-mincho = (`ipaexm`, 0.88, 0.0)
+
+let base-context =
+  Context.make text-width
+  |> set-dominant-wide-script Kana
+  |> set-language Kana Japanese
+  |> set-language HanIdeographic Japanese
+  |> set-dominant-narrow-script Latin
+  |> set-language Latin English
+  |> set-font Kana font-cjk-mincho
+  |> set-font HanIdeographic font-cjk-mincho
+  |> set-font OtherScript font-cjk-mincho
+  |> set-font Latin font-latin-roman
+  |> set-font-size body-font-size
+  |> set-min-gap-of-lines 0pt
+  |> set-paragraph-margin 0pt 0pt
+
+let-rec count-rows rows =
+  match rows with
+  | _ :: rest -> 1 + count-rows rest
+  | [] -> 0
+
+let-rec flatten-rows rows =
+  match rows with
+  | (year, month, detail) :: rest ->
+      year :: month :: detail :: flatten-rows rest
+  | [] -> []
+
+let history-section-row label =
+  let (yearcell, monthcell, _) = rireki-empty-row in
+  (yearcell, monthcell, label)
+
+let append-history-section rendered-rows section-row-indices label rows =
+  if count-rows rows <= 0 then
+    (rendered-rows, section-row-indices)
+  else
+    let section-row-index = count-rows rendered-rows + 1 in
+    (
+      List.append rendered-rows (history-section-row label :: rows),
+      List.append section-row-indices [section-row-index]
+    )
+
+let build-history-rows education-rows work-rows =
+  let (rows1, indices1) =
+    append-history-section [] [] {学歴} education-rows
+  in
+  append-history-section rows1 indices1 {職歴} work-rows
+
+let-inline ctx \cellbreak =
+  Inline.mandatory-break ctx
+
+let-inline ctx \cellfill =
+  Inline.fil
+
+let-inline ctx \namekanagap =
+  Inline.skip name-kana-gap
+
+let-rec concat-paragraphs separator paragraphs =
+  match paragraphs with
+  | [] -> {}
+  | paragraph :: [] -> paragraph
+  | paragraph :: rest ->
+      let restjoined = concat-paragraphs separator rest in
+      {#paragraph;#separator;#restjoined;}
+
+let field-label-fmt width =
+  vmgn 5pt 5pt (hmgn field-label-left-pad field-label-right-pad (cw width))
+
+let field-value-fmt width =
+  vmgn 5pt 5pt (hmgn field-value-left-pad field-value-right-pad (lw width))
+
+let stacked-field-value-fmt width lines ctx _ =
+  let ib =
+    embed-block-top ctx width
+      (fun ctx1 ->
+        lines
+        |> List.map (fun line ->
+             line-break false false
+               (ctx1 |> set-paragraph-margin 3pt 0pt)
+               (read-inline ctx1 line ++ inline-fil))
+        |> Block.concat)
+  in
+  NormalCell((field-value-left-pad, field-value-right-pad, 5pt, 5pt), ib)
+
+let header-fmt width =
+  vmgn 4pt 4pt (hmgn header-left-pad header-right-pad (lw width))
+
+let history-year-fmt =
+  vmgn 6pt 6pt
+    (hmgn history-year-left-pad history-year-right-pad (cw history-year-content-width))
+
+let history-month-fmt =
+  vmgn 6pt 6pt
+    (hmgn history-month-left-pad history-month-right-pad (cw history-month-content-width))
+
+let history-detail-fmt =
+  vmgn 6pt 6pt
+    (hmgn history-detail-left-pad history-detail-right-pad (lw history-detail-content-width))
+
+let history-section-detail-fmt =
+  vmgn 6pt 6pt
+    (hmgn history-detail-left-pad history-detail-right-pad (cw history-detail-content-width))
+
+let-rec history-section-fmts section-row-indices =
+  match section-row-indices with
+  | idx :: rest ->
+      (set-fmt- (idx, 2) history-section-detail-fmt)
+      :: history-section-fmts rest
+  | [] -> []
+
+let history-title-fmt =
+  vmgn 4pt 4pt
+    (hmgn history-year-left-pad history-year-right-pad (cw history-detail-content-width))
+
+let freeform-body-fmt =
+  vmgn 14pt 52pt (hmgn freeform-left-pad freeform-right-pad (lw freeform-body-content-width))
+
+let freeform-row-fmt =
+  vmgn 7pt 7pt (hmgn freeform-row-left-pad freeform-row-right-pad (lw freeform-row-content-width))
+
+let make-table-block ctx rules tbconv fmts cells =
+  let ib = read-inline ctx {\easytable?:(rules)?:(tbconv)(fmts)(cells);} in
+  line-break false false
+    (ctx |> set-paragraph-margin 0pt 0pt)
+    (inline-fil ++ ib ++ inline-fil)
+
+let-rec add-full-horizontal-rules idx acc =
+  if idx <= 0 then acc
+  else add-full-horizontal-rules (idx - 1) ((h idx) :: acc)
+
+let rules-2col rows =
+  add-full-horizontal-rules (rows - 1) [rect; v 1]
+
+let rules-3col rows =
+  add-full-horizontal-rules (rows - 1) [rect; v 2; v 1]
+
+let rules-1col rows =
+  add-full-horizontal-rules (rows - 1) [rect]
+
+let render-title ctx page1 =
+  let year = page1#current-year in
+  let month = page1#current-month in
+  let day = page1#current-day in
+  let ctx-title = ctx |> set-font-size title-font-size in
+  let ctx-date = ctx |> set-font-size date-font-size in
+  let ib-title = read-inline ctx-title {履歴書} in
+  let ib-date = read-inline ctx-date {#year; 年 #month; 月 #day; 日現在} in
+  line-break false false (ctx |> set-paragraph-margin 0pt 0pt)
+    (ib-title ++ inline-fil ++ ib-date)
+
+let render-name-table ctx page1 =
+  let namekana = page1#name-kana in
+  let name = page1#name in
+  let name-label = {氏名} in
+  let name-display = {\fontsize(name-font-size){#name;}} in
+  let kana-row = {ふりがな\namekanagap;#namekana;} in
+  let stacked-name-fmt =
+    stacked-field-value-fmt name-row-content-width [name-label; name-display]
+  in
+  make-table-block
+    (ctx |> set-font-size body-font-size)
+    (rules-1col 2)
+    [
+      set-fmt- (1, 0) stacked-name-fmt;
+    ]
+    [field-value-fmt name-row-content-width]
+    [
+      kana-row;
+      {};
+    ]
+
+let-block ctx +resume-left-column page1 =
+  Block.concat [
+    render-title ctx page1;
+    Block.skip 6pt;
+    render-name-table ctx page1;
+  ]
+
+let-block ctx +resume-right-column portrait =
+  read-block ctx '<
+    +fig-center(portrait);
+  >
+
+let render-top-section ctx page1 =
+  let portrait = page1#portrait in
+  let left-column = '<
+    +resume-left-column(page1);
+  > in
+  let right-column = '<
+    +resume-right-column(portrait);
+  > in
+  read-block ctx '<
+    +parallel-bottom?:(left-column-ratio)?:(right-column-ratio)(left-column)(right-column);
+  >
+
+let render-basic-info-table ctx info =
+  let birthyear = info#birth-year in
+  let birthmonth = info#birth-month in
+  let birthday = info#birth-day in
+  let age = info#age in
+  let sex = info#sex in
+  let addresskana = info#address-kana in
+  let addresspostcode = info#address-postcode in
+  let addresslines = info#address-lines in
+  let addressblock =
+    concat-paragraphs {\cellbreak;}
+      ({現住所　〒 #addresspostcode;} :: addresslines)
+  in
+  let phone = info#phone in
+  let email = info#email in
+  let emailfmt = stacked-field-value-fmt info-right-content-width [{E-mail}; email] in
+  make-table-block
+    (ctx |> set-font-size body-font-size)
+    (rules-2col 3)
+    [
+      set-fmt- (2, 1) emailfmt;
+    ]
+    [
+      field-value-fmt info-left-content-width;
+      field-value-fmt info-right-content-width;
+    ]
+    [
+      {生年月日　#birthyear; 年 #birthmonth; 月 #birthday; 日生　（満 #age; 歳）}; {※性別　#sex;};
+      {ふりがな　#addresskana;}; {電話　#phone;};
+      addressblock; {};
+    ]
+
+let render-contact-info-table ctx info =
+  let contactkana = info#contact-kana in
+  let contactpostcode = info#contact-postcode in
+  let contactlines = info#contact-lines in
+  let contact-first-line =
+    {連絡先　〒 #contactpostcode;\cellfill;（現住所以外に連絡を希望する場合のみ記入）}
+  in
+  let contactblock =
+    concat-paragraphs {\cellbreak;}
+      (contact-first-line :: contactlines)
+  in
+  let contactphone = info#contact-phone in
+  let contactemail = info#contact-email in
+  let contactemailfmt =
+    stacked-field-value-fmt info-right-content-width [{E-mail}; contactemail]
+  in
+  make-table-block
+    (ctx |> set-font-size body-font-size)
+    (rules-2col 2)
+    [
+      set-fmt- (1, 1) contactemailfmt;
+    ]
+    [
+      field-value-fmt info-left-content-width;
+      field-value-fmt info-right-content-width;
+    ]
+    [
+      {ふりがな　#contactkana;}; {電話　#contactphone;};
+      contactblock; {};
+    ]
+
+let make-history-table ctx title rows section-row-indices =
+  let cells = {年} :: {月} :: title :: flatten-rows rows in
+  make-table-block
+    (ctx |> set-font-size body-font-size)
+    (rules-3col (count-rows rows + 1))
+    ((set-fmt- (0, 2) history-title-fmt) :: history-section-fmts section-row-indices)
+    [
+      history-year-fmt;
+      history-month-fmt;
+      history-detail-fmt;
+    ]
+    cells
+
+let render-history-table ctx history =
+  let (history-rows, section-row-indices) =
+    build-history-rows history#education-rows history#work-rows
+  in
+  if count-rows history-rows <= 0 then
+    Block.nil
+  else
+    make-history-table ctx {学　歴・職　歴（各別にまとめて書く）} history-rows section-row-indices
+
+let render-dated-table ctx title rows =
+  if count-rows rows <= 0 then
+    Block.nil
+  else
+    let cells = {年} :: {月} :: title :: flatten-rows rows in
+    make-table-block
+      (ctx |> set-font-size body-font-size)
+      (rules-3col (count-rows rows + 1))
+      [
+        set-fmt- (0, 2) history-title-fmt;
+      ]
+      [
+        history-year-fmt;
+        history-month-fmt;
+        history-detail-fmt;
+      ]
+      cells
+
+let render-note ctx =
+  let ctx-note = ctx |> set-font-size note-font-size in
+  line-break false false (ctx-note |> set-paragraph-margin 0pt 0pt)
+    (read-inline ctx-note {※「性別」欄は記載任意です。未記載とすることも可能です。} ++ inline-fil)
+
+let render-header-strip ctx title =
+  make-table-block
+    (ctx |> set-font-size body-font-size)
+    (rules-1col 1)
+    []
+    [header-fmt header-content-width]
+    [title]
+
+let render-freeform-box ctx freeform =
+  let title = freeform#title in
+  let paragraphs = freeform#paragraphs in
+  match freeform#style with
+  | SingleLargeCell ->
+      let body = concat-paragraphs {\cellbreak;} paragraphs in
+      Block.concat [
+        render-header-strip ctx title;
+        make-table-block
+          (ctx |> set-font-size body-font-size)
+          (rules-1col 1)
+          []
+          [freeform-body-fmt]
+          [body];
+      ]
+  | OneParagraphPerRow ->
+      let rows =
+        match paragraphs with
+        | [] -> [rireki-empty-freeform-row]
+        | freerows -> freerows
+      in
+      Block.concat [
+        render-header-strip ctx title;
+        make-table-block
+          (ctx |> set-font-size body-font-size)
+          (rules-1col (count-rows rows))
+          []
+          [freeform-row-fmt]
+          rows;
+      ]
+
+let-block ctx +rireki-header header =
+  render-top-section ctx header
+
+let-block ctx +rireki-basic-info info =
+  render-basic-info-table ctx info
+
+let-block ctx +rireki-contact-info info =
+  render-contact-info-table ctx info
+
+let-block ctx +rireki-history history =
+  render-history-table ctx history
+
+let-block ctx +rireki-dated-table table =
+  render-dated-table ctx table#title table#rows
+
+let-block ctx +rireki-license license =
+  render-dated-table ctx {免　許・資　格} license#rows
+
+let-block ctx +rireki-awards awards =
+  render-dated-table ctx {賞　罰} awards#rows
+
+let-block ctx +rireki-degrees degrees =
+  render-dated-table ctx {学　位} degrees#rows
+
+let-block ctx +rireki-research-history history =
+  render-dated-table ctx {その他研究歴} history#rows
+
+let-block ctx +rireki-freeform-box freeform =
+  render-freeform-box ctx freeform
+
+let-block ctx +rireki-note =
+  render-note ctx
+
+let rireki-document bt =
+  Pager.make-document
+    Page.a4
+    (fun _ -> (|
+      text-height = text-height;
+      text-origin = (side-margin, top-margin);
+    |))
+    (fun _ -> (|
+      header-content = Block.nil;
+      header-origin = (0pt, 0pt);
+      footer-content = Block.nil;
+      footer-origin = (0pt, 0pt);
+    |))
+    (read-block base-context bt)
